@@ -6,6 +6,7 @@
         <artifactId>hsweb-system-workflow</artifactId>
         <groupId>org.hswebframework.web</groupId>
         <version>3.0.0-RC-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -15,17 +16,7 @@
     <dependencies>
         <dependency>
             <groupId>org.hswebframework.web</groupId>
-            <artifactId>hsweb-system-workflow-dao-mybatis</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.hswebframework.web</groupId>
-            <artifactId>hsweb-system-workflow-flowable</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.hswebframework.web</groupId>
-            <artifactId>hsweb-system-workflow-service-simple</artifactId>
+            <artifactId>hsweb-system-workflow-local</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

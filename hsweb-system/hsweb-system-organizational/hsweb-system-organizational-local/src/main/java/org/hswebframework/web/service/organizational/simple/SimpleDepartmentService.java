@@ -16,10 +16,12 @@
  */
 package org.hswebframework.web.service.organizational.simple;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.dao.organizational.DepartmentDao;
 import org.hswebframework.web.dao.organizational.PositionDao;
 import org.hswebframework.web.entity.organizational.DepartmentEntity;
+import org.hswebframework.web.entity.organizational.OrganizationalEntity;
 import org.hswebframework.web.entity.organizational.PositionEntity;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.service.AbstractTreeSortService;
@@ -27,6 +29,7 @@ import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.EnableCacheAllEvictTreeSortService;
 import org.hswebframework.web.service.GenericEntityService;
 import org.hswebframework.web.service.organizational.DepartmentService;
+import org.hswebframework.web.service.organizational.OrganizationalService;
 import org.hswebframework.web.service.organizational.event.ClearPersonCacheEvent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
@@ -35,8 +38,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 默认的服务实现
@@ -57,6 +60,9 @@ public class SimpleDepartmentService
     @Autowired
     private ApplicationEventPublisher publisher;
 
+    @Autowired
+    private OrganizationalService organizationalService;
+
     @Override
     public DepartmentDao getDao() {
         return departmentDao;
@@ -68,19 +74,49 @@ public class SimpleDepartmentService
     }
 
     @Override
-    @Cacheable(cacheNames = "'org-id:'+#orgId")
+    @Cacheable(key = "'org-id:'+#orgId")
     public List<DepartmentEntity> selectByOrgId(String orgId) {
         return createQuery().where(DepartmentEntity.orgId, orgId).listNoPaging();
     }
 
     @Override
-    @Cacheable(cacheNames = "'name:'+#name")
+    @Cacheable(key = "'org-ids:'+#orgId==null?0:orgId.hashCode()+'_'+#children+'_'+#parent")
+    public List<DepartmentEntity> selectByOrgIds(List<String> orgId, boolean children, boolean parent) {
+        if (CollectionUtils.isEmpty(orgId)) {
+            return Collections.emptyList();
+        }
+        Set<String> allOrgId = new HashSet<>(orgId);
+
+        if (children) {
+            allOrgId.addAll(orgId.stream()
+                    .map(organizationalService::selectAllChildNode)
+                    .flatMap(Collection::stream)
+                    .map(OrganizationalEntity::getId)
+                    .collect(Collectors.toSet()));
+
+        }
+        if (parent) {
+            allOrgId.addAll(orgId.stream()
+                    .map(organizationalService::selectParentNode)
+                    .flatMap(Collection::stream)
+                    .map(OrganizationalEntity::getId)
+                    .collect(Collectors.toSet()));
+        }
+
+        return createQuery()
+                .where()
+                .in(DepartmentEntity.orgId, allOrgId)
+                .listNoPaging();
+    }
+
+    @Override
+    @Cacheable(key = "'name:'+#name")
     public List<DepartmentEntity> selectByName(String name) {
         return createQuery().where(DepartmentEntity.name, name).listNoPaging();
     }
 
     @Override
-    @Cacheable(cacheNames = "'code:'+#code")
+    @Cacheable(key = "'code:'+#code")
     public DepartmentEntity selectByCode(String code) {
         return createQuery().where(DepartmentEntity.code, code).single();
     }

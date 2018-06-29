@@ -14,6 +14,7 @@ import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframework.web.service.AbstractService;
 import org.hswebframework.web.service.DefaultDSLQueryService;
+import org.hswebframework.web.service.authorization.events.ClearUserAuthorizationCacheEvent;
 import org.hswebframework.web.service.authorization.events.UserModifiedEvent;
 import org.hswebframework.web.validate.ValidationException;
 import org.hswebframework.utils.ListUtils;
@@ -165,10 +166,10 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Override
     @Caching(evict = {
-            @CacheEvict(value = CacheConstants.USER_CACHE_NAME, key = "#userId"),
-            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "#userId"),
-            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'user-menu-list:'+#userId"),
-            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'menu-tree:'+#userId")
+            @CacheEvict(value = CacheConstants.USER_CACHE_NAME, key = "#userId")
+//           , @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "#userId"),
+//            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'user-menu-list:'+#userId"),
+//            @CacheEvict(value = CacheConstants.USER_AUTH_CACHE_NAME, key = "'menu-tree:'+#userId")
     })
     public void update(String userId, UserEntity userEntity) {
         userEntity.setId(userId);
@@ -180,9 +181,9 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         //不修改的字段
         List<String> excludeProperties = new ArrayList<>(Arrays.asList(
                 UserEntity.username
-                ,UserEntity.password
-                ,UserEntity.salt
-                ,UserEntity.status));
+                , UserEntity.password
+                , UserEntity.salt
+                , UserEntity.status));
         //修改密码
         if (StringUtils.hasLength(userEntity.getPassword())) {
             //密码强度验证
@@ -210,6 +211,8 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         if (excludeProperties.contains(UserEntity.password)) {
             publisher.publishEvent(new UserModifiedEvent(userEntity, passwordModified, roleModified));
         }
+        publisher.publishEvent(new ClearUserAuthorizationCacheEvent(userId, false));
+
     }
 
     @Override
@@ -281,5 +284,15 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         //使用用户的配置
         settingInfo.add(new SettingInfo(SETTING_TYPE_USER, userId));
         return settingInfo;
+    }
+
+    @Override
+    public List<UserEntity> selectByUserByRole(List<String> roleIdList) {
+        if (CollectionUtils.isEmpty(roleIdList)) {
+            return Collections.emptyList();
+        }
+        return createQuery()
+                .where("id", "user-in-role", roleIdList)
+                .listNoPaging();
     }
 }

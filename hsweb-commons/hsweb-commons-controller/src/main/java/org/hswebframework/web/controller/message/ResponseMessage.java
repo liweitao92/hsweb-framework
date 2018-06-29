@@ -28,7 +28,9 @@ import java.lang.reflect.Field;
 import java.util.*;
 
 /**
- * 响应消息。controller中处理后，返回此对象，响应请求结果给客户端。
+ * 响应消息,controller中处理后，返回此对象，响应请求结果给客户端。
+ *
+ * @since 2.0
  */
 @ApiModel(description = "响应结果")
 public class ResponseMessage<T> implements Serializable {
@@ -41,6 +43,11 @@ public class ResponseMessage<T> implements Serializable {
     protected int status;
 
     private Long timestamp;
+
+    /**
+     * @since 3.0.0-RC
+     */
+    private String code;
 
     @ApiModelProperty("调用结果消息")
     public String getMessage() {
@@ -60,6 +67,11 @@ public class ResponseMessage<T> implements Serializable {
     @ApiModelProperty(value = "时间戳", required = true, dataType = "Long")
     public Long getTimestamp() {
         return timestamp;
+    }
+
+    @ApiModelProperty(value = "业务代码")
+    public String getCode() {
+        return code;
     }
 
     public static <T> ResponseMessage<T> error(String message) {
@@ -91,6 +103,12 @@ public class ResponseMessage<T> implements Serializable {
 
     public ResponseMessage<T> result(T result) {
         this.result = result;
+        return this;
+    }
+
+
+    public ResponseMessage<T> code(String code) {
+        this.code = code;
         return this;
     }
 
@@ -127,7 +145,7 @@ public class ResponseMessage<T> implements Serializable {
                     if (field1 != null) {
                         include(field1.getType(), tmp[1]);
                     }
-                } catch (Throwable e) {
+                } catch (Exception ignore) {
                 }
             } else {
                 getStringListFromMap(includes, type).add(field);
@@ -151,7 +169,7 @@ public class ResponseMessage<T> implements Serializable {
                     if (field1 != null) {
                         exclude(field1.getType(), tmp[1]);
                     }
-                } catch (Throwable e) {
+                } catch (Exception ignore) {
                 }
             } else {
                 getStringListFromMap(excludes, type).add(field);

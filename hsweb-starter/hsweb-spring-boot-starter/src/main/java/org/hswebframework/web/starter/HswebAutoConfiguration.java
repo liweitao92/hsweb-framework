@@ -24,18 +24,20 @@ import com.alibaba.fastjson.parser.ParserConfig;
 import com.alibaba.fastjson.parser.deserializer.JavaBeanDeserializer;
 import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
 import com.alibaba.fastjson.serializer.SerializerFeature;
+import org.hswebframework.web.ApplicationContextHolder;
 import org.hswebframework.web.ThreadLocalUtils;
 import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.commons.entity.factory.MapperEntityFactory;
 import org.hswebframework.web.convert.CustomMessageConverter;
-import org.hswebframework.web.dict.EnumDict;
+import org.hswebframework.web.service.DefaultLogicPrimaryKeyValidator;
 import org.hswebframework.web.starter.convert.FastJsonGenericHttpMessageConverter;
 import org.hswebframework.web.starter.convert.FastJsonHttpMessageConverter;
 import org.hswebframework.web.starter.entity.EntityFactoryInitConfiguration;
 import org.hswebframework.web.starter.entity.EntityProperties;
 import org.hswebframework.web.starter.resolver.AuthorizationArgumentResolver;
 import org.hswebframework.web.starter.resolver.JsonParamResolver;
+import org.hswebframework.web.validator.LogicPrimaryKeyValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -45,7 +47,6 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -57,9 +58,6 @@ import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.sql.DataSource;
-import javax.validation.Validation;
-import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -68,7 +66,6 @@ import java.util.List;
  * @author zhouhao
  */
 @Configuration
-//@ComponentScan("org.hswebframework.web")
 @EnableConfigurationProperties(EntityProperties.class)
 @ImportAutoConfiguration(EntityFactoryInitConfiguration.class)
 public class HswebAutoConfiguration {
@@ -174,8 +171,15 @@ public class HswebAutoConfiguration {
     @ConditionalOnMissingBean(EntityFactory.class)
     public MapperEntityFactory mapperEntityFactory() {
         MapperEntityFactory entityFactory = new MapperEntityFactory(entityProperties.createMappers());
-        FastBeanCopier.setBeanFactory(entityFactory); ;
+        FastBeanCopier.setBeanFactory(entityFactory);
+        ;
         return entityFactory;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(LogicPrimaryKeyValidator.class)
+    public LogicPrimaryKeyValidator logicPrimaryKeyValidator() {
+        return DefaultLogicPrimaryKeyValidator.getInstrance();
     }
 
     @Bean
@@ -192,6 +196,11 @@ public class HswebAutoConfiguration {
         public DataSource dataSource(DataSourceProperties properties) {
             return properties.initializeDataSourceBuilder().build();
         }
+    }
+
+    @Bean
+    public ApplicationContextHolder applicationContextHolder() {
+        return new ApplicationContextHolder();
     }
 
     @Bean

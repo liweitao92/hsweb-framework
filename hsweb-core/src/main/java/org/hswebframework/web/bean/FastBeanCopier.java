@@ -34,6 +34,7 @@ public final class FastBeanCopier {
 
     private static final Map<Class, Class> wrapperClassMapping = new HashMap<>();
 
+    @SuppressWarnings("all")
     public static final Class[] EMPTY_CLASS_ARRAY = new Class[0];
 
     private static BeanFactory BEAN_FACTORY = new BeanFactory() {
@@ -75,6 +76,16 @@ public final class FastBeanCopier {
         DEFAULT_CONVERT.setBeanFactory(BEAN_FACTORY);
     }
 
+    @SuppressWarnings("all")
+    public static Set<String> include(String... inculdeProperties) {
+        return new HashSet<String>(Arrays.asList(inculdeProperties)) {
+            @Override
+            public boolean contains(Object o) {
+                return !super.contains(o);
+            }
+        };
+    }
+
     public static <T, S> T copy(S source, T target, String... ignore) {
         return copy(source, target, DEFAULT_CONVERT, ignore);
     }
@@ -83,12 +94,29 @@ public final class FastBeanCopier {
         return copy(source, target.get(), DEFAULT_CONVERT, ignore);
     }
 
+    @SneakyThrows
     public static <T, S> T copy(S source, Class<T> target, String... ignore) {
-        try {
-            return copy(source, target.newInstance(), DEFAULT_CONVERT, ignore);
-        } catch (Exception e) {
-            throw new RuntimeException(e.getMessage(), e);
+        return copy(source, target.newInstance(), DEFAULT_CONVERT, ignore);
+    }
+
+    public static <T, S> T copy(S source, T target, Converter converter, String... ignore) {
+        return copy(source, target, converter, (ignore == null || ignore.length == 0) ? Collections.emptySet() : new HashSet<>(Arrays.asList(ignore)));
+    }
+
+    public static <T, S> T copy(S source, T target, Set<String> ignore) {
+        return copy(source, target, DEFAULT_CONVERT, ignore);
+    }
+
+    @SuppressWarnings("all")
+    public static <T, S> T copy(S source, T target, Converter converter, Set<String> ignore) {
+        if (source instanceof Map && target instanceof Map) {
+            ((Map) target).putAll(((Map) source));
+            return target;
         }
+
+        getCopier(source, target, true)
+                .copy(source, target, ignore, converter);
+        return target;
     }
 
     public static Copier getCopier(Object source, Object target, boolean autoCreate) {
@@ -101,16 +129,6 @@ public final class FastBeanCopier {
             return CACHE.get(key);
         }
 
-    }
-
-    public static <T, S> T copy(S source, T target, Converter converter, String... ignore) {
-        if (source instanceof Map && target instanceof Map) {
-            ((Map) target).putAll(((Map) source));
-            return target;
-        }
-        getCopier(source, target, true)
-                .copy(source, target, (ignore == null || ignore.length == 0) ? Collections.emptySet() : new HashSet<>(Arrays.asList(ignore)), converter);
-        return target;
     }
 
     private static CacheKey createCacheKey(Class source, Class target) {
@@ -129,7 +147,6 @@ public final class FastBeanCopier {
                 "\n}\n" +
                 "\n}";
         try {
-//            System.out.println(method);
             return Proxy.create(Copier.class)
                     .addMethod(method)
                     .newInstance();
@@ -140,16 +157,22 @@ public final class FastBeanCopier {
     }
 
     private static Map<String, ClassProperty> createProperty(Class type) {
+
+        List<String> fieldNames = Arrays.stream(type.getDeclaredFields())
+                .map(Field::getName).collect(Collectors.toList());
+
         return Stream.of(propertyUtils.getPropertyDescriptors(type))
                 .filter(property -> !property.getName().equals("class") && property.getReadMethod() != null && property.getWriteMethod() != null)
                 .map(BeanClassProperty::new)
-                .collect(Collectors.toMap(ClassProperty::getName, Function.identity()));
+                //让字段有序
+                .sorted(Comparator.comparing(property -> fieldNames.indexOf(property.name)))
+                .collect(Collectors.toMap(ClassProperty::getName, Function.identity(), (k, k2) -> k, LinkedHashMap::new));
 
     }
 
     private static Map<String, ClassProperty> createMapProperty(Map<String, ClassProperty> template) {
         return template.values().stream().map(classProperty -> new MapClassProperty(classProperty.name))
-                .collect(Collectors.toMap(ClassProperty::getName, Function.identity()));
+                .collect(Collectors.toMap(ClassProperty::getName, Function.identity(), (k, k2) -> k, LinkedHashMap::new));
     }
 
     private static String createCopierCode(Class source, Class target) {

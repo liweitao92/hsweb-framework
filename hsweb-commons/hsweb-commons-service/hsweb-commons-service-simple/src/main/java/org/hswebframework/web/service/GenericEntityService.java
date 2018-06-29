@@ -22,11 +22,16 @@ import org.hswebframework.web.commons.entity.GenericEntity;
 import org.hswebframework.web.commons.entity.RecordCreationEntity;
 import org.hswebframework.web.dao.CrudDao;
 import org.hswebframework.web.id.IDGenerator;
+import org.hswebframework.web.validator.DuplicateKeyException;
+import org.hswebframework.web.validator.LogicPrimaryKeyValidator;
 import org.hswebframework.web.validator.group.CreateGroup;
 import org.hswebframework.web.validator.group.UpdateGroup;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
+import org.springframework.util.StringUtils;
 
+import javax.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -53,6 +58,13 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
      */
     protected abstract IDGenerator<PK> getIDGenerator();
 
+    @PostConstruct
+    public void init() {
+        if (null != logicPrimaryKeyValidator && logicPrimaryKeyValidator instanceof DefaultLogicPrimaryKeyValidator) {
+            DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(getEntityInstanceType(), bean -> this.createQuery().not("id", bean.getId()));
+        }
+    }
+
     @Override
     public int deleteByPk(PK pk) {
         Assert.notNull(pk, "parameter can not be null");
@@ -65,6 +77,7 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
         Assert.notNull(entity, "entity can not be null");
         entity.setId(pk);
         tryValidate(entity, UpdateGroup.class);
+
         return createUpdate(entity)
                 //如果是RecordCreationEntity则不修改creator_id和creator_time
                 .when(entity instanceof RecordCreationEntity,
@@ -95,14 +108,20 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
         return entity.getId();
     }
 
+    @SuppressWarnings("unchecked")
     protected boolean dataExisted(E entity) {
+        if (null != logicPrimaryKeyValidator) {
+            logicPrimaryKeyValidator
+                    .validate(entity)
+                    .ifError(result -> entity.setId(result.getData().getId()));
+        }
         return null != entity.getId() && null != selectByPk(entity.getId());
     }
 
     @Override
     public PK insert(E entity) {
         if (entity.getId() != null) {
-            if ((entity.getId() instanceof String)) {
+            if ((entity.getId() instanceof String) && !StringUtils.isEmpty(entity.getId())) {
                 tryValidateProperty(entity.getId().toString().matches("[a-zA-Z0-9_\\-]+"), "id", "只能由数字,字母,下划线,和-组成");
             }
             tryValidateProperty(selectByPk(entity.getId()) == null, "id", entity.getId() + "已存在");

@@ -25,6 +25,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,18 +41,40 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
 
     @Override
     @Transactional(readOnly = true)
+    public List<E> selectParentNode(PK childId) {
+        assertNotNull(childId);
+        E old = selectByPk(childId);
+        if (null == old) {
+            return Collections.emptyList();
+        }
+        return createQuery()
+                .where()
+                // where ? like concat(path,'%')
+                .and("path$like$reverse$startWith", old.getPath())
+                .listNoPaging();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<E> selectAllChildNode(PK parentId) {
         assertNotNull(parentId);
         E old = selectByPk(parentId);
-        assertNotNull(old);
-        return createQuery().where().like$(TreeSupportEntity.path, old.getPath()).noPaging().list();
+        if (null == old) {
+            return Collections.emptyList();
+        }
+        return createQuery()
+                .where()
+                .like$(TreeSupportEntity.path, old.getPath())
+                .listNoPaging();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<E> selectChildNode(PK parentId) {
         assertNotNull(parentId);
-        return createQuery().where(TreeSupportEntity.parentId, parentId).noPaging().list();
+        return createQuery()
+                .where(TreeSupportEntity.parentId, parentId)
+                .listNoPaging();
     }
 
     //当父节点不存在时,创建parentId
@@ -67,6 +90,7 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         if (StringUtils.isEmpty(entity.getParentId())) {
             entity.setSortIndex(0L);
             entity.setParentId(createParentIdOnExists());
+            entity.setLevel(0);
             entity.setPath(RandomUtil.randomChar(4));
             return;
         }
@@ -80,10 +104,12 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
                 entity.setSortIndex(0L);
             entity.setParentId(createParentIdOnExists());
             entity.setPath(RandomUtil.randomChar(4));
+            entity.setLevel(0);
         } else {
-            if (entity.getSortIndex() == null&&parent.getSortIndex()!=null)
+            if (entity.getSortIndex() == null && parent.getSortIndex() != null)
                 entity.setSortIndex(parent.getSortIndex() * 10);
             entity.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
+            entity.setLevel(entity.getPath().split("[-]").length);
         }
     }
 
@@ -95,8 +121,6 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         applyPath(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        super.insert(entity);
-//        childrenList.remove(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return entity.getId();
     }
@@ -119,13 +143,11 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         assertNotNull(entity);
         List<E> childrenList = new ArrayList<>();
         TreeSupportEntity.expandTree2List(entity, childrenList, getIDGenerator());
-//        this.saveOrUpdateForSingle(entity);
-//        childrenList.remove(entity);
         childrenList.forEach(this::saveOrUpdateForSingle);
         return childrenList.size() + 1;
     }
 
-    public PK saveOrUpdateForSingle(E entity) {
+    protected PK saveOrUpdateForSingle(E entity) {
         assertNotNull(entity);
         PK id = entity.getId();
         if (null == id || this.selectByPk(id) == null) {
